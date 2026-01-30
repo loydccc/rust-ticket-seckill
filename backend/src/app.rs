@@ -3,7 +3,7 @@ use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{config::Config, db::Db, openapi::ApiDoc, routes};
+use crate::{config::Config, db::Db, openapi::ApiDoc, routes, worker};
 
 pub async fn build_router(cfg: Config, db: Db) -> anyhow::Result<Router<Db>> {
     let governor_conf = GovernorConfigBuilder::default()
@@ -12,6 +12,9 @@ pub async fn build_router(cfg: Config, db: Db) -> anyhow::Result<Router<Db>> {
         .finish()
         .expect("valid governor config");
 
+    // Background worker for internal "auto-buy" intents.
+    worker::spawn_intent_worker(db.clone());
+
     let app = Router::new()
         .with_state(db)
         .merge(routes::health::router())
@@ -19,10 +22,10 @@ pub async fn build_router(cfg: Config, db: Db) -> anyhow::Result<Router<Db>> {
         .merge(routes::admin::router())
         .merge(routes::seckill::router())
         .merge(routes::orders::router())
+        .merge(routes::purchase_intents::router())
         .route("/", get(|| async { (StatusCode::OK, "ticket-seckill-backend") }))
         .merge(
-            SwaggerUi::new("/docs")
-                .url("/api-doc/openapi.json", ApiDoc::openapi()),
+            SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()),
         )
         .layer(CorsLayer::very_permissive())
         .layer(TraceLayer::new_for_http())

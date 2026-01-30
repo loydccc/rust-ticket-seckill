@@ -10,7 +10,7 @@ async fn setup() -> (String, PgPool) {
     db.migrate().await.unwrap();
 
     // Clean between tests.
-    sqlx::query("truncate table orders, ticket_types, events restart identity cascade")
+    sqlx::query("truncate table purchase_intents, orders, users, ticket_types, events restart identity cascade")
         .execute(&db.pool)
         .await
         .unwrap();
@@ -39,16 +39,34 @@ async fn setup() -> (String, PgPool) {
     (format!("http://{}", addr), db.pool)
 }
 
+async fn login(client: &Client, base: &str, username: &str) -> String {
+    let res = client
+        .post(format!("{}/api/auth/login", base))
+        .json(&json!({"username": username}))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json::<serde_json::Value>()
+        .await
+        .unwrap();
+    res["token"].as_str().unwrap().to_string()
+}
+
 #[tokio::test]
-async fn seckill_is_idempotent_and_atomic() {
+async fn grab_is_idempotent_and_atomic() {
     let (base, pool) = setup().await;
     let client = Client::new();
+
+    let token_u1 = login(&client, &base, "u1").await;
+    let token_u2 = login(&client, &base, "u2").await;
 
     // Create event
     let starts_at = Utc::now();
     let ends_at = starts_at + Duration::hours(2);
     let ev = client
-        .post(format!("{}/admin/events", base))
+        .post(format!("{}/api/admin/events", base))
         .json(&json!({"name":"concert","starts_at":starts_at,"ends_at":ends_at}))
         .send()
         .await
@@ -64,7 +82,7 @@ async fn seckill_is_idempotent_and_atomic() {
     let sale_starts_at = Utc::now() - Duration::minutes(1);
     let sale_ends_at = Utc::now() + Duration::minutes(30);
     let tt = client
-        .post(format!("{}/admin/events/{}/ticket_types", base, event_id))
+        .post(format!("{}/api/admin/events/{}/ticket_types", base, event_id))
         .json(&json!({
             "name":"A",
             "price_cents":100,
@@ -82,12 +100,13 @@ async fn seckill_is_idempotent_and_atomic() {
         .unwrap();
     let ticket_type_id = tt["id"].as_str().unwrap();
 
-    // First seckill should succeed
+    // First grab should succeed
     let idem = "k1";
     let order1 = client
-        .post(format!("{}/seckill", base))
+        .post(format!("{}/api/tickets/grab", base))
+        .bearer_auth(&token_u1)
         .header("idempotency-key", idem)
-        .json(&json!({"user_id":"u1","ticket_type_id":ticket_type_id,"qty":1}))
+        .json(&json!({"ticket_type_id": ticket_type_id, "qty": 1}))
         .send()
         .await
         .unwrap()
@@ -97,11 +116,12 @@ async fn seckill_is_idempotent_and_atomic() {
         .await
         .unwrap();
 
-    // Repeat with same idempotency key should return same order id, without decrementing inventory again.
+    // Repeat with same idempotency key should return same order id
     let order2 = client
-        .post(format!("{}/seckill", base))
+        .post(format!("{}/api/tickets/grab", base))
+        .bearer_auth(&token_u1)
         .header("idempotency-key", idem)
-        .json(&json!({"user_id":"u1","ticket_type_id":ticket_type_id,"qty":1}))
+        .json(&json!({"ticket_type_id": ticket_type_id, "qty": 1}))
         .send()
         .await
         .unwrap()
@@ -115,9 +135,10 @@ async fn seckill_is_idempotent_and_atomic() {
 
     // Another user should be out of stock
     let resp = client
-        .post(format!("{}/seckill", base))
+        .post(format!("{}/api/tickets/grab", base))
+        .bearer_auth(&token_u2)
         .header("idempotency-key", "k2")
-        .json(&json!({"user_id":"u2","ticket_type_id":ticket_type_id,"qty":1}))
+        .json(&json!({"ticket_type_id": ticket_type_id, "qty": 1}))
         .send()
         .await
         .unwrap();

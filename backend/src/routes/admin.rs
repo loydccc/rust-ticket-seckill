@@ -30,7 +30,7 @@ pub struct EventDto {
 
 #[utoipa::path(
     post,
-    path = "/admin/events",
+    path = "/api/admin/events",
     request_body = CreateEventRequest,
     responses((status=200, body=EventDto))
 )]
@@ -60,7 +60,7 @@ pub async fn create_event(
 
 #[utoipa::path(
     get,
-    path = "/events",
+    path = "/api/events",
     responses((status=200, body=[EventDto]))
 )]
 pub async fn list_events(
@@ -97,7 +97,7 @@ pub struct TicketTypeDto {
 
 #[utoipa::path(
     post,
-    path = "/admin/events/{event_id}/ticket_types",
+    path = "/api/admin/events/{event_id}/ticket_types",
     params(("event_id" = Uuid, Path, description = "Event id")),
     request_body = CreateTicketTypeRequest,
     responses((status=200, body=TicketTypeDto))
@@ -147,7 +147,7 @@ pub async fn create_ticket_type(
 
 #[utoipa::path(
     get,
-    path = "/events/{event_id}/ticket_types",
+    path = "/api/events/{event_id}/ticket_types",
     params(("event_id" = Uuid, Path, description = "Event id")),
     responses((status=200, body=[TicketTypeDto]))
 )]
@@ -165,16 +165,51 @@ pub async fn list_ticket_types(
     Ok(Json(rows))
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct CreateTicketTypeFlatRequest {
+    pub event_id: Uuid,
+    pub name: String,
+    pub price_cents: i64,
+    pub inventory_total: i32,
+    pub sale_starts_at: DateTime<Utc>,
+    pub sale_ends_at: DateTime<Utc>,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/admin/ticket-types",
+    request_body = CreateTicketTypeFlatRequest,
+    responses((status=200, body=TicketTypeDto))
+)]
+pub async fn create_ticket_type_flat(
+    axum::extract::State(db): axum::extract::State<Db>,
+    Json(req): Json<CreateTicketTypeFlatRequest>,
+) -> AppResult<Json<TicketTypeDto>> {
+    create_ticket_type(
+        axum::extract::State(db),
+        Path(req.event_id),
+        Json(CreateTicketTypeRequest {
+            name: req.name,
+            price_cents: req.price_cents,
+            inventory_total: req.inventory_total,
+            sale_starts_at: req.sale_starts_at,
+            sale_ends_at: req.sale_ends_at,
+        }),
+    )
+    .await
+}
+
 pub fn router() -> Router<Db> {
     Router::new()
+        // required paths
+        .route("/api/admin/events", post(create_event))
+        .route("/api/events", get(list_events))
+        .route("/api/admin/events/:event_id/ticket_types", post(create_ticket_type))
+        .route("/api/events/:event_id/ticket_types", get(list_ticket_types))
+        .route("/api/admin/ticket-types", post(create_ticket_type_flat))
+        // compatibility (old, no /api prefix)
         .route("/admin/events", post(create_event))
         .route("/events", get(list_events))
-        .route(
-            "/admin/events/:event_id/ticket_types",
-            post(create_ticket_type),
-        )
-        .route(
-            "/events/:event_id/ticket_types",
-            get(list_ticket_types),
-        )
+        .route("/admin/events/:event_id/ticket_types", post(create_ticket_type))
+        .route("/events/:event_id/ticket_types", get(list_ticket_types))
 }
