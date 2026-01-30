@@ -1,0 +1,126 @@
+{
+  "info": {
+    "name": "rust-ticket-seckill",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Activities",
+      "item": [
+        {
+          "name": "GET /api/activities",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/activities", "host": ["{{baseUrl}}"], "path": ["api", "activities"] }
+          }
+        },
+        {
+          "name": "POST /api/activities",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Concert A\",\n  \"starts_at\": \"2026-01-01T12:00:00Z\",\n  \"ends_at\": \"2026-01-01T14:00:00Z\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/activities", "host": ["{{baseUrl}}"], "path": ["api", "activities"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "TicketTypes",
+      "item": [
+        {
+          "name": "GET /api/activities/:activityId/ticket-types",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/activities/{{activityId}}/ticket-types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "activities", "{{activityId}}", "ticket-types"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/activities/:activityId/ticket-types",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VIP\",\n  \"price_cents\": 19900,\n  \"total\": 100,\n  \"per_user_limit\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/activities/{{activityId}}/ticket-types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "activities", "{{activityId}}", "ticket-types"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "POST /api/orders (Idempotency)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "demo-key-1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user-001\",\n  \"ticket_type_id\": \"{{ticketTypeId}}\",\n  \"qty\": 1\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          }
+        },
+        {
+          "name": "GET /api/orders/:orderId",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "POST /api/payments/simulate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{orderId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/payments/simulate", "host": ["{{baseUrl}}"], "path": ["api", "payments", "simulate"] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "activityId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "ticketTypeId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "orderId", "value": "00000000-0000-0000-0000-000000000000" }
+  ]
+}
