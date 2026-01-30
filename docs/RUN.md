@@ -61,5 +61,6 @@ npm run tauri dev
 
 ## 6) Smoke test API
 
+- Open Swagger UI (backend provides it): `http://localhost:8080/docs`
 - Import `docs/postman_collection.json` into Postman
 - Or open `docs/openapi.yaml` in Swagger Editor

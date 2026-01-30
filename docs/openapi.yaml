@@ -1,88 +1,66 @@
 openapi: 3.0.3
 info:
-  title: rust-ticket-seckill API
+  title: ticket-seckill-backend API
   version: 0.1.0
   description: |
-    Minimal ticket seckill system (planned contract).
+    Contract aligned with the current Axum implementation (see backend/src/openapi.rs).
 servers:
   - url: http://localhost:8080
 
 tags:
-  - name: Activities
-  - name: TicketTypes
-  - name: Orders
-  - name: Payments
+  - name: health
+  - name: admin
+  - name: seckill
+  - name: orders
 
 paths:
-  /api/health:
+  /healthz:
     get:
+      tags: [health]
       summary: Health check
       responses:
         '200':
           description: OK
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean }
+              schema: { $ref: '#/components/schemas/HealthzResponse' }
 
-  /api/activities:
-    get:
-      tags: [Activities]
-      summary: List activities
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/Activity' }
+  /admin/events:
     post:
-      tags: [Activities]
-      summary: Create activity
+      tags: [admin]
+      summary: Create event
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateActivityRequest' }
+            schema: { $ref: '#/components/schemas/CreateEventRequest' }
       responses:
-        '201':
-          description: Created
+        '200':
+          description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Activity' }
+              schema: { $ref: '#/components/schemas/EventDto' }
 
-  /api/activities/{activityId}/ticket-types:
+  /events:
     get:
-      tags: [TicketTypes]
-      summary: List ticket types for an activity
-      parameters:
-        - in: path
-          name: activityId
-          required: true
-          schema: { type: string, format: uuid }
+      tags: [admin]
+      summary: List events
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/TicketTypeWithInventory' }
+                type: array
+                items: { $ref: '#/components/schemas/EventDto' }
+
+  /admin/events/{event_id}/ticket_types:
     post:
-      tags: [TicketTypes]
-      summary: Create a ticket type for an activity
+      tags: [admin]
+      summary: Create ticket type
       parameters:
         - in: path
-          name: activityId
+          name: event_id
           required: true
           schema: { type: string, format: uuid }
       requestBody:
@@ -91,47 +69,19 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateTicketTypeRequest' }
       responses:
-        '201':
-          description: Created
+        '200':
+          description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TicketTypeWithInventory' }
+              schema: { $ref: '#/components/schemas/TicketTypeDto' }
 
-  /api/orders:
-    post:
-      tags: [Orders]
-      summary: Create order (seckill)
-      description: |
-        Use Idempotency-Key header to make retries safe.
-      parameters:
-        - in: header
-          name: Idempotency-Key
-          required: false
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateOrderRequest' }
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Order' }
-        '409':
-          description: Conflict / out of stock
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  /api/orders/{orderId}:
+  /events/{event_id}/ticket_types:
     get:
-      tags: [Orders]
-      summary: Get order
+      tags: [admin]
+      summary: List ticket types for an event
       parameters:
         - in: path
-          name: orderId
+          name: event_id
           required: true
           schema: { type: string, format: uuid }
       responses:
@@ -139,41 +89,80 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Order' }
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TicketTypeDto' }
 
-  /api/payments/simulate:
+  /seckill:
     post:
-      tags: [Payments]
-      summary: Simulate payment (dev only)
+      tags: [seckill]
+      summary: Seckill / purchase (MVP: qty=1)
+      parameters:
+        - in: header
+          name: idempotency-key
+          required: false
+          schema: { type: string }
+          description: Idempotency key (per user). Strongly recommended.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SimulatePaymentRequest' }
+            schema: { $ref: '#/components/schemas/SeckillRequest' }
       responses:
         '200':
           description: OK
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean }
+              schema: { $ref: '#/components/schemas/OrderDto' }
+        '409':
+          description: Out of stock or not in sale window
+
+  /orders/{order_id}:
+    get:
+      tags: [orders]
+      summary: Get order
+      parameters:
+        - in: path
+          name: order_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDto' }
+        '404':
+          description: Not found
+
+  /orders/{order_id}/pay:
+    post:
+      tags: [orders]
+      summary: Simulate payment (dev only)
+      parameters:
+        - in: path
+          name: order_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDto' }
+        '404':
+          description: Not found
+        '409':
+          description: Conflict (not payable)
 
 components:
   schemas:
-    Activity:
+    HealthzResponse:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        starts_at: { type: string, format: date-time }
-        ends_at: { type: string, format: date-time }
-        status: { type: string, enum: [draft, published, closed] }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
+        ok: { type: boolean }
 
-    CreateActivityRequest:
+    CreateEventRequest:
       type: object
       required: [name, starts_at, ends_at]
       properties:
@@ -181,60 +170,51 @@ components:
         starts_at: { type: string, format: date-time }
         ends_at: { type: string, format: date-time }
 
-    TicketTypeWithInventory:
+    EventDto:
       type: object
       properties:
         id: { type: string, format: uuid }
-        activity_id: { type: string, format: uuid }
         name: { type: string }
-        price_cents: { type: integer }
-        per_user_limit: { type: integer }
-        sale_starts_at: { type: string, format: date-time, nullable: true }
-        sale_ends_at: { type: string, format: date-time, nullable: true }
-        total: { type: integer }
-        available: { type: integer }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
 
     CreateTicketTypeRequest:
       type: object
-      required: [name, price_cents, total]
+      required: [name, price_cents, inventory_total, sale_starts_at, sale_ends_at]
       properties:
         name: { type: string }
-        price_cents: { type: integer }
-        total: { type: integer }
-        per_user_limit: { type: integer, default: 1 }
-        sale_starts_at: { type: string, format: date-time, nullable: true }
-        sale_ends_at: { type: string, format: date-time, nullable: true }
+        price_cents: { type: integer, format: int64 }
+        inventory_total: { type: integer, format: int32 }
+        sale_starts_at: { type: string, format: date-time }
+        sale_ends_at: { type: string, format: date-time }
 
-    Order:
+    TicketTypeDto:
       type: object
       properties:
         id: { type: string, format: uuid }
-        user_id: { type: string }
-        activity_id: { type: string, format: uuid }
-        ticket_type_id: { type: string, format: uuid }
-        qty: { type: integer }
-        amount_cents: { type: integer }
-        status: { type: string, enum: [pending, paid, cancelled, expired] }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
+        event_id: { type: string, format: uuid }
+        name: { type: string }
+        price_cents: { type: integer, format: int64 }
+        inventory_total: { type: integer, format: int32 }
+        inventory_remaining: { type: integer, format: int32 }
+        sale_starts_at: { type: string, format: date-time }
+        sale_ends_at: { type: string, format: date-time }
 
-    CreateOrderRequest:
+    SeckillRequest:
       type: object
       required: [user_id, ticket_type_id, qty]
       properties:
         user_id: { type: string }
         ticket_type_id: { type: string, format: uuid }
-        qty: { type: integer, minimum: 1 }
+        qty: { type: integer, format: int32, enum: [1] }
 
-    SimulatePaymentRequest:
-      type: object
-      required: [order_id]
-      properties:
-        order_id: { type: string, format: uuid }
-
-    ErrorResponse:
+    OrderDto:
       type: object
       properties:
-        code: { type: string }
-        message: { type: string }
-        details: { type: object, additionalProperties: true }
+        id: { type: string, format: uuid }
+        user_id: { type: string }
+        ticket_type_id: { type: string, format: uuid }
+        qty: { type: integer, format: int32 }
+        amount_cents: { type: integer, format: int64 }
+        status: { type: string, enum: [pending, paid, canceled] }
+        created_at: { type: string, format: date-time }

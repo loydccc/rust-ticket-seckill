@@ -13,9 +13,9 @@
 ### Backend (Axum)
 
 Responsibilities:
-- Activities (活动)：创建/查询
-- Ticket types (票种)：价格、可购窗口、每单限购等
-- Inventory (库存)：高并发下的一致性扣减
+- Events/Activities (活动)：创建/查询（当前实现命名为 `events`）
+- Ticket types (票种)：价格、可购窗口、库存等
+- Inventory (库存)：高并发下的一致性扣减（MVP 在 `ticket_types.inventory_remaining`）
 - Orders (订单)：创建、查询、状态流转
 - Payments (支付)：模拟支付回调，驱动订单完成
 
