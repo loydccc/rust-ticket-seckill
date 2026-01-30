@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{db::Db, error::{AppError, AppResult}};
 use utoipa::ToSchema;
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, sqlx::FromRow)]
 pub struct OrderDto {
     pub id: Uuid,
     pub user_id: String,
@@ -27,12 +27,11 @@ pub async fn get_order(
     axum::extract::State(db): axum::extract::State<Db>,
     Path(order_id): Path<Uuid>,
 ) -> AppResult<Json<OrderDto>> {
-    let order = sqlx::query_as!(
-        OrderDto,
-        r#"select id, user_id, ticket_type_id, qty, amount_cents, status as \"status!\", created_at
+    let order = sqlx::query_as::<_, OrderDto>(
+        r#"select id, user_id, ticket_type_id, qty, amount_cents, status, created_at
            from orders where id = $1"#,
-        order_id
     )
+    .bind(order_id)
     .fetch_optional(&db.pool)
     .await?;
 
@@ -54,12 +53,11 @@ pub async fn pay_order(
 ) -> AppResult<Json<OrderDto>> {
     let mut tx = db.pool.begin().await?;
 
-    let order = sqlx::query_as!(
-        OrderDto,
-        r#"select id, user_id, ticket_type_id, qty, amount_cents, status as \"status!\", created_at
+    let order = sqlx::query_as::<_, OrderDto>(
+        r#"select id, user_id, ticket_type_id, qty, amount_cents, status, created_at
            from orders where id = $1 for update"#,
-        order_id
     )
+    .bind(order_id)
     .fetch_optional(&mut *tx)
     .await?;
 
@@ -73,13 +71,12 @@ pub async fn pay_order(
         return Err(AppError::Conflict("order not payable".into()));
     }
 
-    let updated = sqlx::query_as!(
-        OrderDto,
+    let updated = sqlx::query_as::<_, OrderDto>(
         r#"update orders set status = 'paid', paid_at = now()
            where id = $1
-           returning id, user_id, ticket_type_id, qty, amount_cents, status as \"status!\", created_at"#,
-        order_id
+           returning id, user_id, ticket_type_id, qty, amount_cents, status, created_at"#,
     )
+    .bind(order_id)
     .fetch_one(&mut *tx)
     .await?;
 

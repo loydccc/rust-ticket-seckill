@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-cd "$ROOT_DIR"
+cd "$(dirname "$0")/.."
 
-docker compose -f deploy/docker-compose.yml down
+docker compose -f deploy/docker-compose.yml down -v

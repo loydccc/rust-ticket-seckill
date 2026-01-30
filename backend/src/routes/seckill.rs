@@ -16,7 +16,7 @@ pub struct SeckillRequest {
     pub qty: i32,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, sqlx::FromRow)]
 pub struct OrderDto {
     pub id: Uuid,
     pub user_id: String,
@@ -54,14 +54,13 @@ pub async fn seckill(
     let mut tx = db.pool.begin().await?;
 
     if let Some(key) = &idempotency_key {
-        let existing = sqlx::query_as!(
-            OrderDto,
-            r#"select id, user_id, ticket_type_id, qty, amount_cents, status as \"status!\", created_at
+        let existing = sqlx::query_as::<_, OrderDto>(
+            r#"select id, user_id, ticket_type_id, qty, amount_cents, status, created_at
                from orders
                where user_id = $1 and idempotency_key = $2"#,
-            req.user_id,
-            key
         )
+        .bind(&req.user_id)
+        .bind(key)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -74,7 +73,7 @@ pub async fn seckill(
     // Atomic inventory decrement.
     // We enforce time window (sale_starts_at <= now < sale_ends_at).
     let now = Utc::now();
-    let updated = sqlx::query!(
+    let updated: Option<(i64,)> = sqlx::query_as(
         r#"update ticket_types
            set inventory_remaining = inventory_remaining - 1
            where id = $1
@@ -82,14 +81,14 @@ pub async fn seckill(
              and sale_starts_at <= $2
              and sale_ends_at > $2
            returning price_cents"#,
-        req.ticket_type_id,
-        now
     )
+    .bind(req.ticket_type_id)
+    .bind(now)
     .fetch_optional(&mut *tx)
     .await?;
 
     let price_cents = match updated {
-        Some(row) => row.price_cents,
+        Some((price_cents,)) => price_cents,
         None => {
             tx.rollback().await?;
             return Err(AppError::Conflict("out of stock or not in sale window".into()));
@@ -97,18 +96,17 @@ pub async fn seckill(
     };
 
     let order_id = Uuid::new_v4();
-    let rec = sqlx::query_as!(
-        OrderDto,
+    let rec = sqlx::query_as::<_, OrderDto>(
         r#"insert into orders (id, user_id, ticket_type_id, qty, amount_cents, status, idempotency_key)
            values ($1,$2,$3,$4,$5,'pending', $6)
-           returning id, user_id, ticket_type_id, qty, amount_cents, status as \"status!\", created_at"#,
-        order_id,
-        req.user_id,
-        req.ticket_type_id,
-        req.qty,
-        price_cents,
-        idempotency_key
+           returning id, user_id, ticket_type_id, qty, amount_cents, status, created_at"#,
     )
+    .bind(order_id)
+    .bind(&req.user_id)
+    .bind(req.ticket_type_id)
+    .bind(req.qty)
+    .bind(price_cents)
+    .bind(idempotency_key)
     .fetch_one(&mut *tx)
     .await?;
 

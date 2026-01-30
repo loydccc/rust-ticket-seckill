@@ -15,5 +15,22 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ENV: dev
+      RUST_LOG: info
+      SERVER_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketing
+      RATE_LIMIT_RPS: 50
+      RATE_LIMIT_BURST: 100
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:

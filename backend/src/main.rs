@@ -1,12 +1,5 @@
-mod app;
-mod config;
-mod db;
-mod error;
-mod openapi;
-mod routes;
-
-use crate::{config::Config, db::Db};
 use anyhow::Context;
+use ticket_seckill_backend::{config, config::Config, db::Db};
 use tracing::info;
 
 #[tokio::main]
@@ -23,9 +16,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("bind {}", cfg.server_addr))?;
 
-    let app = app::build_router(cfg.clone(), db.clone()).await?;
+    let app = ticket_seckill_backend::app::build_router(cfg.clone(), db.clone()).await?;
 
     info!(addr = %cfg.server_addr, "server listening");
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }

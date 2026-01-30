@@ -3,6 +3,8 @@ use axum::{Json, Router};
 use serde::Serialize;
 use utoipa::ToSchema;
 
+use crate::db::Db;
+
 #[derive(Serialize, ToSchema)]
 pub struct HealthzResponse {
     pub ok: bool,
@@ -17,6 +19,6 @@ pub async fn healthz() -> Json<HealthzResponse> {
     Json(HealthzResponse { ok: true })
 }
 
-pub fn router() -> Router {
+pub fn router() -> Router<Db> {
     Router::new().route("/healthz", get(healthz))
 }
