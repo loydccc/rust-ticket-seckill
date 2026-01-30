@@ -1,7 +1,54 @@
-# Tauri + Vue + TypeScript
+# Clawd Desktop (Tauri + Vite + Vue3 + TypeScript)
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Minimal desktop UI:
 
-## Recommended IDE Setup
+- Login
+- Events/Tickets list with remaining
+- Grab ticket with status
+- My orders list with pay action
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Prerequisites
+
+Tauri requires Rust + OS deps.
+
+- https://tauri.app/start/prerequisites/
+
+## Setup
+
+```bash
+cd desktop
+cp .env.example .env
+npm install
+```
+
+## Dev
+
+Web (no Tauri shell):
+
+```bash
+npm run dev
+```
+
+Desktop (Tauri):
+
+```bash
+npm run tauri:dev
+```
+
+## Build
+
+```bash
+npm run tauri:build
+```
+
+## API base URL
+
+Configure via `VITE_API_BASE_URL` in `.env`.
+
+Expected endpoints (adjust backend accordingly):
+
+- `POST /auth/login` { username, password } -> { token }
+- `GET /events` -> Event[] with embedded tickets
+- `POST /tickets/grab` { ticketId }
+- `GET /orders/my` -> Order[]
+- `POST /orders/:id/pay`
