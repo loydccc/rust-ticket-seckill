@@ -1,0 +1,66 @@
+name: backend-ci
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/backend-ci.yml"
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            backend -> target
+
+      - name: Detect backend manifest
+        id: detect
+        shell: bash
+        run: |
+          if [ -f backend/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: cargo fmt
+        if: steps.detect.outputs.present == 'true'
+        run: cargo fmt --all --manifest-path backend/Cargo.toml -- --check
+
+      - name: cargo clippy
+        if: steps.detect.outputs.present == 'true'
+        run: cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        if: steps.detect.outputs.present == 'true'
+        run: cargo test --manifest-path backend/Cargo.toml --all-features
+
+      - name: cargo build (release)
+        if: steps.detect.outputs.present == 'true'
+        run: cargo build --manifest-path backend/Cargo.toml --release
+
+      - name: Skip (backend not initialized)
+        if: steps.detect.outputs.present != 'true'
+        run: echo "backend/Cargo.toml not found; skipping."

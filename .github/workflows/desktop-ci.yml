@@ -1,0 +1,94 @@
+name: desktop-ci
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-ci.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-ci.yml"
+
+concurrency:
+  group: desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect
+        shell: bash
+        run: |
+          if [ -f desktop/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f desktop/pnpm-lock.yaml ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f desktop/yarn.lock ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          else
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: ${{ steps.detect.outputs.pm }}
+          cache-dependency-path: |
+            desktop/package-lock.json
+            desktop/pnpm-lock.yaml
+            desktop/yarn.lock
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.present == 'true' && steps.detect.outputs.pm == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install deps
+        if: steps.detect.outputs.present == 'true'
+        working-directory: desktop
+        shell: bash
+        run: |
+          case "${{ steps.detect.outputs.pm }}" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            yarn) yarn install --frozen-lockfile ;;
+            npm)  npm ci ;;
+          esac
+
+      - name: Lint (best-effort)
+        if: steps.detect.outputs.present == 'true'
+        working-directory: desktop
+        shell: bash
+        run: |
+          if npm run -s | grep -qE '^\s*lint'; then
+            echo "Running lint";
+            npm run lint;
+          else
+            echo "No lint script; skipping.";
+          fi
+
+      - name: Build (best-effort)
+        if: steps.detect.outputs.present == 'true'
+        working-directory: desktop
+        shell: bash
+        run: |
+          if npm run -s | grep -qE '^\s*build'; then
+            echo "Running build";
+            npm run build;
+          else
+            echo "No build script; skipping.";
+          fi
+
+      - name: Skip (desktop not initialized)
+        if: steps.detect.outputs.present != 'true'
+        run: echo "desktop/package.json not found; skipping."
